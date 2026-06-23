@@ -8,8 +8,8 @@ st.subheader("Online Order Tracking System")
 
 # ⚠️ APNI GOOGLE SHEET KA URL YAHAN PASTE KAREIN
 # Yaad rahe ke URL ke aakhir mai '/edit?usp=sharing' ko hata kar '/export?format=csv' likhna hai
-SHEET_ID = "APNI_GOOGLE_SHEET_KI_ID"
-GOOGLE_SHEET_URL = f"https://docs.google.com/spreadsheets/d/1gp6LhD-Kc_kDN7ErBw3R04YNvlyr_AGkeTUYPBBkp8U/edit?gid=0#gid=0
+SHEET_ID = "1gp6LhD-Kc_kDN7ErBw3R04YNvlyr_AGkeTUYPBBkp8U"
+GOOGLE_SHEET_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv"
 
 @st.cache_data(ttl=10) # Har 10 second baad data refresh ho sakega
 def load_data():
