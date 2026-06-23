@@ -26,7 +26,7 @@ def load_data():
 data = load_data()
 
 if data is not None:
-    search_input = st.text_input("Apna Order ID ya Mobile Number likhein:", placeholder="e.g. 1001")
+    search_input = st.text_input("Apna Order ID ya Mobile Number (0) ky Bagair likhein:", placeholder="e.g. 1001")
 
     if search_input:
         search_input = search_input.strip()
