@@ -7,7 +7,6 @@ st.title("📦 AHA TRENDY")
 st.subheader("Online Order Tracking System")
 
 # ⚠️ APNI GOOGLE SHEET KA URL YAHAN PASTE KAREIN
-# Yaad rahe ke URL ke aakhir mai '/edit?usp=sharing' ko hata kar '/export?format=csv' likhna hai
 SHEET_ID = "1gp6LhD-Kc_kDN7ErBw3R04YNvlyr_AGkeTUYPBBkp8U"
 GOOGLE_SHEET_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv"
 
@@ -26,7 +25,20 @@ def load_data():
 data = load_data()
 
 if data is not None:
-    search_input = st.text_input("Apna Order ID ya Mobile Number (0) ky Bagair likhein:", placeholder="e.g. 1001")
+    # 1. URL se check karein ke kya '?order_id=...' bheja gaya hai
+    url_params = st.query_params
+    
+    # 2. Agar URL mein order_id mojood hai to usko utha lein, nahi to khali rakhein
+    default_search = ""
+    if "order_id" in url_params:
+        default_search = url_params["order_id"]
+    
+    # 3. Input box ko default value dein (Agar URL se mili hai to auto-fill ho jaye)
+    search_input = st.text_input(
+        "Apna Order ID ya Mobile Number (0) ky Bagair likhein:", 
+        value=default_search, 
+        placeholder="e.g. 1001"
+    )
 
     if search_input:
         search_input = search_input.strip()
