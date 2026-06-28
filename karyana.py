@@ -404,7 +404,7 @@ elif choice == "📦 Stock Management" and st.session_state.user_role == "Admin"
                 st.rerun()
 
     with tab4:
-        st.subheader("❌ Delete Item")
+        st.subheader("🗑️ Delete Item")
         conn = get_db_connection()
         df_items_del = pd.read_sql_query("SELECT * FROM inventory", conn)
         conn.close()
@@ -419,28 +419,37 @@ elif choice == "📦 Stock Management" and st.session_state.user_role == "Admin"
                 st.error(f"🗑️ {del_item_selected} ko nikal diya gaya.")
                 st.rerun()
 
-# ==================== 3. KHATA (UDHAAR) SYSTEM ====================
+# ==================== 3. KHATA (UDHAAR) SYSTEM (UPDATED WITH MODIFY & DELETE) ====================
 elif choice == "📒 Khata (Udhaar) System" and st.session_state.user_role == "Admin":
     st.header("📒 Khata Ledger (Udhaar Management)")
-    tab1, tab2, tab3 = st.tabs(["👥 Customer Statement & Ledger", "👤 Register New Customer", "💰 Cash Received (Udhaar Wapsi)"])
+    
+    # Paanch tabs bana diye hain taake Udhaar Wapsi, Modify aur Delete sab alag aur aasan ho jaye
+    tab1, tab2, tab3, tab4, tab5 = st.tabs([
+        "👥 Customer Statement & Ledger", 
+        "👤 Register New Customer", 
+        "💰 Cash Received (Udhaar Wapsi)",
+        "✏️ Modify Customer Details",
+        "🗑️ Delete Customer Account"
+    ])
     
     conn = get_db_connection()
-    df_khata = pd.read_sql_query("SELECT name as 'Name', phone as 'Account Number (Mobile)', balance as 'Pending Udhaar (Rs)' FROM khata", conn)
+    df_khata = pd.read_sql_query("SELECT customer_id, name as 'Name', phone as 'Account Number (Mobile)', balance as 'Pending Udhaar (Rs)' FROM khata", conn)
     df_all_sales = pd.read_sql_query("SELECT * FROM sales WHERE customer_name != 'Walk-in Customer'", conn)
     conn.close()
     
+    # 3.1 CUSTOMER STATEMENT & LEDGER
     with tab1:
         if df_khata.empty:
             st.info("Abhi tak koi khata account nahi bana.")
         else:
             st.subheader("Summary Ledger")
-            st.dataframe(df_khata, use_container_width=True)
+            st.dataframe(df_khata.drop(columns=['customer_id']), use_container_width=True)
             
             st.markdown("---")
             st.subheader("🔍 Customer Search (Naam ya Account Number se search karen)")
             
             search_options = {f"{row['Name']} (Account Number: {row['Account Number (Mobile)']})": row['Name'] for idx, row in df_khata.iterrows()}
-            selected_ledger_option = st.selectbox("Customer Select Karen:", list(search_options.keys()))
+            selected_ledger_option = st.selectbox("Customer Select Karen:", list(search_options.keys()), key="ledger_search_select")
             selected_ledger_cust = search_options[selected_ledger_option]
             
             customer_ledger = df_all_sales[df_all_sales['customer_name'] == selected_ledger_cust].copy()
@@ -484,6 +493,7 @@ elif choice == "📒 Khata (Udhaar) System" and st.session_state.user_role == "A
                     """
                     trigger_print(html_content)
             
+    # 3.2 REGISTER NEW CUSTOMER
     with tab2:
         st.subheader("👤 Naya Customer Register Karen")
         c_name = st.text_input("Customer Name").strip()
@@ -518,7 +528,8 @@ elif choice == "📒 Khata (Udhaar) System" and st.session_state.user_role == "A
                         st.error("⚠️ Database Error: Naam ya Mobile Number pehle se majood hai.")
                     finally:
                         conn.close()
-                    
+                        
+    # 3.3 CASH RECEIVED (UDHAAR WAPSI)
     with tab3:
         st.subheader("💰 Cash Received (Udhaar Wapsi Summary)")
         
@@ -552,16 +563,77 @@ elif choice == "📒 Khata (Udhaar) System" and st.session_state.user_role == "A
                 st.session_state.khata_success_msg = f"🎉 Successfully Updated! {cust_select} ke khate se {amount_paid:,.2f} Rs received entry save ho gayi hai."
                 st.rerun()
 
-# ==================== 4. EXPIENSE TRACKER ====================
+    # 3.4 MODIFY CUSTOMER DETAILS
+    with tab4:
+        st.subheader("✏️ Customer Profile / Balance Modify Karen")
+        if df_khata.empty:
+            st.info("Modify karne ke liye koi customer profile majood nahi hai.")
+        else:
+            mod_cust_options = {f"{row['Name']} (Acc: {row['Account Number (Mobile)']}) - Bal: {row['Pending Udhaar (Rs)']} Rs": row['customer_id'] for idx, row in df_khata.iterrows()}
+            selected_mod_label = st.selectbox("Kis customer ki details tabdeel karni hain?", list(mod_cust_options.keys()), key="khata_mod_select")
+            target_cust_id = mod_cust_options[selected_mod_label]
+            
+            current_cust_data = df_khata[df_khata['customer_id'] == target_cust_id].iloc[0]
+            
+            new_cust_name = st.text_input("Naya Name Darj Karen", value=current_cust_data['Name'], key="khata_new_name")
+            new_cust_phone = st.text_input("Naya Account/Mobile Number", value=current_cust_data['Account Number (Mobile)'], key="khata_new_phone")
+            new_cust_balance = st.number_input("Udhaar Balance Direct Tabdeel Karen (Rs)", value=float(current_cust_data['Pending Udhaar (Rs)']), key="khata_new_bal")
+            
+            if st.button("💾 Update Customer Profile"):
+                if new_cust_name.strip() == "" or new_cust_phone.strip() == "":
+                    st.error("Naam aur Phone number khali nahi chor sakte!")
+                else:
+                    conn = get_db_connection()
+                    cursor = conn.cursor()
+                    try:
+                        cursor.execute("""UPDATE khata 
+                                          SET name = ?, phone = ?, balance = ? 
+                                          WHERE customer_id = ?""", 
+                                       (new_cust_name.strip(), new_cust_phone.strip(), new_cust_balance, target_cust_id))
+                        conn.commit()
+                        st.session_state.khata_success_msg = "✓ Customer details kamyabi se update ho gayi hain!"
+                        st.rerun()
+                    except sqlite3.IntegrityError:
+                        st.error("⚠️ Error: Yeh Naam ya Mobile Number pehle se kisi aur customer ke paas register hai.")
+                    finally:
+                        conn.close()
+
+    # 3.5 DELETE CUSTOMER ACCOUNT
+    with tab5:
+        st.subheader("🗑️ Customer Khata Account Hamesha Ke Liye Delete Karen")
+        if df_khata.empty:
+            st.info("Delete karne ke liye koi account majood nahi hai.")
+        else:
+            del_cust_options = {f"{row['Name']} (Acc: {row['Account Number (Mobile)']}) - Balance: {row['Pending Udhaar (Rs)']} Rs": row['customer_id'] for idx, row in df_khata.iterrows()}
+            selected_del_label = st.selectbox("Kis customer ka account delete karna hai?", list(del_cust_options.keys()), key="khata_del_select")
+            target_del_id = del_cust_options[selected_del_label]
+            
+            st.warning("⚠️ Warning: Account delete karne se customer ka naam aur balance khata list se saaf ho jayega. (Sales record barkrar rahega)")
+            if st.button("🗑️ Confirm Delete Customer Khata"):
+                conn = get_db_connection()
+                cursor = conn.cursor()
+                cursor.execute("DELETE FROM khata WHERE customer_id = ?", (target_del_id,))
+                conn.commit()
+                conn.close()
+                st.session_state.khata_success_msg = "🗑️ Customer account ledger se kamyabi se delete kar diya gaya hai."
+                st.rerun()
+
+# ==================== 4. EXPENSE TRACKER ====================
 elif choice == "💸 Expense Tracker" and st.session_state.user_role == "Admin":
     st.header("💸 Dukan Ke Rozana Ke Kharche (Expense Tracker)")
     
-    tab1, tab2 = st.tabs(["➕ Naya Kharcha Add Karen", "📋 Kharche Ki List (Logs)"])
+    tab1, tab2, tab3, tab4 = st.tabs([
+        "➕ Naya Kharcha Add Karen", 
+        "📋 Kharche Ki List (Logs)", 
+        "✏️ Modify Expense", 
+        "🗑️ Delete Expense"
+    ])
     
     if "expense_success_msg" in st.session_state:
         st.success(st.session_state.expense_success_msg)
         del st.session_state.expense_success_msg
 
+    # 4.1 ADD EXPENSE
     with tab1:
         st.subheader("Kharche Ki Tafseel Darj Karen")
         exp_category = st.selectbox("Kharche Ki Category Select Karen", [
@@ -571,9 +643,9 @@ elif choice == "💸 Expense Tracker" and st.session_state.user_role == "Admin":
             "Chai / Mehman Nawazi / Snacks", 
             "Dukan Ka Mutafariq Saman / Stationary",
             "Other (Koi Aur Kharcha)"
-        ])
-        exp_amount = st.number_input("Kharche Ki Rakam (Amount in Rs)", min_value=1.0, value=50.0, step=10.0)
-        exp_details = st.text_area("Kharcha Kis Cheez Par Hua? (Details/Remarks)").strip()
+        ], key="add_exp_cat")
+        exp_amount = st.number_input("Kharche Ki Rakam (Amount in Rs)", min_value=1.0, value=50.0, step=10.0, key="add_exp_amt")
+        exp_details = st.text_area("Kharcha Kis Cheez Par Hua? (Details/Remarks)", key="add_exp_det").strip()
         
         if st.button("💾 Save Expense Record"):
             conn = get_db_connection()
@@ -589,10 +661,11 @@ elif choice == "💸 Expense Tracker" and st.session_state.user_role == "Admin":
             st.session_state.expense_success_msg = f"🎉 Successfully Updated! {exp_category} ka {exp_amount:,.2f} Rs ka kharcha record ho gaya hai."
             st.rerun()
             
+    # 4.2 EXPENSE LIST / LOGS
     with tab2:
         st.subheader("📋 Tamam Kharche")
         conn = get_db_connection()
-        df_exp_list = pd.read_sql_query("SELECT expense_date as '📅 Date & Time', category as '📁 Category', amount as '💰 Amount (Rs)', details as '📝 Details' FROM expenses ORDER BY expense_id DESC", conn)
+        df_exp_list = pd.read_sql_query("SELECT expense_id, expense_date as '📅 Date & Time', category as '📁 Category', amount as '💰 Amount (Rs)', details as '📝 Details' FROM expenses ORDER BY expense_id DESC", conn)
         conn.close()
         
         if df_exp_list.empty:
@@ -600,13 +673,79 @@ elif choice == "💸 Expense Tracker" and st.session_state.user_role == "Admin":
         else:
             total_exp_all_time = df_exp_list['💰 Amount (Rs)'].sum()
             st.metric(label="📊 Kul Total Kharche (All Time)", value=f"{total_exp_all_time:,.2f} Rs")
-            st.dataframe(df_exp_list, use_container_width=True)
+            st.dataframe(df_exp_list.drop(columns=['expense_id']), use_container_width=True)
 
-# ==================== 5. SUPPLIER MANAGEMENT (UPDATED) ====================
+    # 4.3 MODIFY EXPENSE
+    with tab3:
+        st.subheader("✏️ Kharcha Modify / Tabdeel Karen")
+        conn = get_db_connection()
+        df_mod_exp = pd.read_sql_query("SELECT * FROM expenses ORDER BY expense_id DESC", conn)
+        conn.close()
+        
+        if df_mod_exp.empty:
+            st.info("Modify karne ke liye koi kharcha majood nahi hai.")
+        else:
+            exp_options = {f"ID {row['expense_id']} | {row['category']} ({row['amount']} Rs) - {row['expense_date']}": row['expense_id'] for idx, row in df_mod_exp.iterrows()}
+            selected_exp_label = st.selectbox("Kis kharche ko modify karna hai?", list(exp_options.keys()), key="mod_exp_select")
+            target_exp_id = exp_options[selected_exp_label]
+            
+            current_exp_data = df_mod_exp[df_mod_exp['expense_id'] == target_exp_id].iloc[0]
+            
+            categories_list = [
+                "Bijli Ka Bill (Electricity)", "Dukan Ka Kiraya (Rent)", 
+                "Dukan Ke Ladke Ki Salary", "Chai / Mehman Nawazi / Snacks", 
+                "Dukan Ka Mutafariq Saman / Stationary", "Other (Koi Aur Kharcha)"
+            ]
+            
+            if current_exp_data['category'] in categories_list:
+                cat_index = categories_list.index(current_exp_data['category'])
+            else:
+                cat_index = 0
+                
+            mod_category = st.selectbox("Category Tabdeel Karen", categories_list, index=cat_index, key="mod_exp_cat")
+            mod_amount = st.number_input("Rakam Tabdeel Karen (Rs)", min_value=1.0, value=float(current_exp_data['amount']), key="mod_exp_amt")
+            mod_details = st.text_area("Details Tabdeel Karen", value=current_exp_data['details'], key="mod_exp_det").strip()
+            
+            if st.button("💾 Update Expense Details"):
+                conn = get_db_connection()
+                cursor = conn.cursor()
+                cursor.execute("""UPDATE expenses 
+                                  SET category = ?, amount = ?, details = ? 
+                                  WHERE expense_id = ?""", 
+                               (mod_category, mod_amount, mod_details, target_exp_id))
+                conn.commit()
+                conn.close()
+                st.session_state.expense_success_msg = "✓ Kharcha kamyabi se update kar diya gaya hai!"
+                st.rerun()
+
+    # 4.4 DELETE EXPENSE
+    with tab4:
+        st.subheader("🗑️ Kharcha Delete / Remove Karen")
+        conn = get_db_connection()
+        df_del_exp = pd.read_sql_query("SELECT * FROM expenses ORDER BY expense_id DESC", conn)
+        conn.close()
+        
+        if df_del_exp.empty:
+            st.info("Delete karne ke liye koi kharcha majood nahi hai.")
+        else:
+            del_options = {f"ID {row['expense_id']} | {row['category']} ({row['amount']} Rs) - {row['expense_date']}": row['expense_id'] for idx, row in df_del_exp.iterrows()}
+            selected_del_label = st.selectbox("Kis kharche ko delete karna hai?", list(del_options.keys()), key="del_exp_select")
+            target_del_id = del_options[selected_del_label]
+            
+            st.warning(f"⚠️ Kya aap waqai is expense record ko hamesha ke liye delete karna chahte hain?")
+            if st.button("🗑️ Confirm Delete Expense"):
+                conn = get_db_connection()
+                cursor = conn.cursor()
+                cursor.execute("DELETE FROM expenses WHERE expense_id = ?", (target_del_id,))
+                conn.commit()
+                conn.close()
+                st.session_state.expense_success_msg = "🗑️ Expense record ko kamyabi se delete kar diya gaya hai."
+                st.rerun()
+
+# ==================== 5. SUPPLIER MANAGEMENT ====================
 elif choice == "👥 Supplier Management" and st.session_state.user_role == "Admin":
     st.header("👥 Supplier / Wholesaler Management")
     
-    # MODIFIED HERE: Added Modify and Delete tabs alongside existing ones
     tab_sup1, tab_sup2, tab_sup3, tab_sup4, tab_sup5 = st.tabs([
         "👥 Supplier Register & Summary", 
         "✏️ Modify Supplier", 
@@ -620,7 +759,7 @@ elif choice == "👥 Supplier Management" and st.session_state.user_role == "Adm
         del st.session_state.sup_success_msg
         
     conn = get_db_connection()
-    df_sups = pd.read_sql_query("SELECT name as 'Supplier Name', phone as 'Mobile / Account', company as 'Company/Wholesale Shop', balance as 'Our Payable Balance (Rs)' FROM suppliers", conn)
+    df_sups = pd.read_sql_query("SELECT supplier_id, name as 'Supplier Name', phone as 'Mobile / Account', company as 'Company/Wholesale Shop', balance as 'Our Payable Balance (Rs)' FROM suppliers", conn)
     df_inv_list = pd.read_sql_query("SELECT item_name FROM inventory", conn)
     conn.close()
     
@@ -652,9 +791,8 @@ elif choice == "👥 Supplier Management" and st.session_state.user_role == "Adm
         if df_sups.empty:
             st.info("Abhi tak koi wholesale supplier register nahi kiya gaya.")
         else:
-            st.dataframe(df_sups, use_container_width=True)
+            st.dataframe(df_sups[['Supplier Name', 'Mobile / Account', 'Company/Wholesale Shop', 'Our Payable Balance (Rs)']], use_container_width=True)
             
-    # NEW FEATURE: MODIFY SUPPLIER TAB
     with tab_sup2:
         st.subheader("✏️ Supplier Ki Details Tabdeel/Modify Karen")
         if df_sups.empty:
@@ -664,206 +802,141 @@ elif choice == "👥 Supplier Management" and st.session_state.user_role == "Adm
             selected_mod_sup = st.selectbox("Kis Supplier ki details change karni hain?", list(mod_sup_options.keys()), key="sup_mod_sel")
             target_sup_name = mod_sup_options[selected_mod_sup]
             
-            # Get current record details
-            conn = get_db_connection()
-            cursor = conn.cursor()
-            cursor.execute("SELECT name, phone, company, balance FROM suppliers WHERE name = ?", (target_sup_name,))
-            sup_details = cursor.fetchone()
-            conn.close()
+            current_sup_row = df_sups[df_sups['Supplier Name'] == target_sup_name].iloc[0]
             
-            if sup_details:
-                col_m1, col_m2, col_m3 = st.columns(3)
-                updated_name = col_m1.text_input("Update Name", value=sup_details[0])
-                updated_phone = col_m2.text_input("Update Mobile / Account", value=sup_details[1])
-                updated_company = col_m3.text_input("Update Company / Shop Name", value=sup_details[2])
-                updated_balance = st.number_input("Update Ledger Balance (Rs)", value=float(sup_details[3]))
-                
-                if st.button("💾 Save Updated Supplier Details"):
-                    if updated_name == "" or updated_phone == "":
-                        st.error("Name aur Mobile number khali nahi chor sakte!")
-                    else:
-                        conn = get_db_connection()
-                        cursor = conn.cursor()
-                        try:
-                            cursor.execute("""UPDATE suppliers 
-                                              SET name = ?, phone = ?, company = ?, balance = ? 
-                                              WHERE name = ?""", 
-                                           (updated_name, updated_phone, updated_company, updated_balance, target_sup_name))
-                            conn.commit()
-                            st.session_state.sup_success_msg = f"✓ '{target_sup_name}' ke records kamyabi se update ho gaye!"
-                            st.rerun()
-                        except sqlite3.IntegrityError:
-                            st.error("⚠️ Error: Yeh naya naam ya phone number kisi aur supplier ke naam par pehle se registered hai.")
-                        finally:
-                            conn.close()
+            new_sup_name = st.text_input("Edit Supplier Name", value=current_sup_row['Supplier Name'])
+            new_sup_phone = st.text_input("Edit Mobile / Account Number", value=current_sup_row['Mobile / Account'])
+            new_sup_company = st.text_input("Edit Company / Wholesale Shop", value=current_sup_row['Company/Wholesale Shop'])
+            new_sup_balance = st.number_input("Edit Current Outstanding Balance (Rs)", value=float(current_sup_row['Our Payable Balance (Rs)']), min_value=0.0)
+            
+            if st.button("💾 Update Supplier Records"):
+                conn = get_db_connection()
+                cursor = conn.cursor()
+                try:
+                    cursor.execute("""UPDATE suppliers 
+                                      SET name = ?, phone = ?, company = ?, balance = ? 
+                                      WHERE supplier_id = ?""", 
+                                   (new_sup_name, new_sup_phone, new_sup_company, new_sup_balance, int(current_sup_row['supplier_id'])))
+                    conn.commit()
+                    st.session_state.sup_success_msg = f"✓ Supplier '{new_sup_name}' ka record update ho gaya!"
+                    st.rerun()
+                except sqlite3.IntegrityError:
+                    st.error("❌ Integrity Error: Yeh updated details kisi aur account se match kar rahi hain.")
+                finally:
+                    conn.close()
 
-    # NEW FEATURE: DELETE SUPPLIER TAB
     with tab_sup3:
-        st.subheader("🗑️ Registered Supplier Deletion")
+        st.subheader("🗑️ Delete Supplier Account")
         if df_sups.empty:
-            st.info("Database mein koi supplier nahi hai.")
+            st.info("Account clear hai. Koi supplier records majood nahi.")
         else:
-            del_sup_options = {f"{row['Supplier Name']} ({row['Company/Wholesale Shop']}) [Payable: {row['Our Payable Balance (Rs)']} Rs]": row['Supplier Name'] for idx, row in df_sups.iterrows()}
-            selected_del_sup = st.selectbox("Kis Supplier ko system se nikalna hai?", list(del_sup_options.keys()), key="sup_del_sel")
+            del_sup_options = {f"{row['Supplier Name']} ({row['Company/Wholesale Shop']}) Balance: {row['Our Payable Balance (Rs)']} Rs": row['Supplier Name'] for idx, row in df_sups.iterrows()}
+            selected_del_sup = st.selectbox("Kis supplier ko system se delete karna hai?", list(del_sup_options.keys()), key="sup_del_sel")
             target_del_name = del_sup_options[selected_del_sup]
             
-            st.warning(f"⚠️ **Khususi Tawajah:** Kya aap waqai '{target_del_name}' ka mukammal account system se delete karna chahte hain? Yeh action wapas nahi laya ja sakega.")
-            
-            if st.button("🗑️ Confirm Permanent Delete"):
+            st.warning(f"⚠️ Kya aap waqai '{target_del_name}' ko delete karna chahte hain? Iska ledger data saaf ho jayega.")
+            if st.button("🗑️ Confirm Delete Supplier Account"):
                 conn = get_db_connection()
                 cursor = conn.cursor()
                 cursor.execute("DELETE FROM suppliers WHERE name = ?", (target_del_name,))
                 conn.commit()
                 conn.close()
-                st.session_state.sup_success_msg = f"❌ Supplier '{target_del_name}' ko system se kamyabi se delete kar diya gaya."
+                st.session_state.sup_success_msg = f"🗑️ Supplier '{target_del_name}' ko kamyabi se remove kar diya gaya."
                 st.rerun()
 
     with tab_sup4:
-        st.subheader("📦 Maal Purchase / Stock Inward Entry")
-        if df_sups.empty or df_inv_list.empty:
-            st.warning("⚠️ Pehle 'Supplier Register' karen aur 'Stock Management' mein item shamil karen!")
+        st.subheader("📦 Purchase / Wholesale Item Se Stock Inward")
+        if df_sups.empty:
+            st.error("Pehle aik supplier register karen.")
+        elif df_inv_list.empty:
+            st.error("Pehle 'Stock Management' mein ja kar item create karen.")
         else:
             col_p1, col_p2 = st.columns(2)
-            sup_options = {f"{row['Supplier Name']} ({row['Company/Wholesale Shop']})": row['Supplier Name'] for idx, row in df_sups.iterrows()}
-            selected_p_sup = col_p1.selectbox("Kis Supplier se maal aaya?", list(sup_options.keys()))
-            chosen_sup_name = sup_options[selected_p_sup]
+            sup_selection_options = {f"{row['Supplier Name']} ({row['Company/Wholesale Shop']})": row['Supplier Name'] for idx, row in df_sups.iterrows()}
+            chosen_sup = col_p1.selectbox("Supplier Select Karen", list(sup_selection_options.keys()), key="purchase_sup_select")
+            chosen_sup_raw_name = sup_selection_options[chosen_sup]
             
-            chosen_p_item = col_p2.selectbox("Kaunsa Item Aaya?", df_inv_list['item_name'].tolist())
+            chosen_item = col_p2.selectbox("Item Select Karen Jiska Stock Aaya Hai", df_inv_list['item_name'].tolist())
             
-            col_p3, col_p4, col_p5 = st.columns(3)
-            p_qty = col_p3.number_input("Kitni Quantity Aayi? (Qty)", min_value=1, value=50)
-            p_cost = col_p4.number_input("Kharid Qemat Kya Lagi? (Cost per Unit Rs)", min_value=0.0, value=20.0)
-            p_cash_paid = col_p5.number_input("Mauqe Par Kitne Paise Diye? (Cash Paid Rs)", min_value=0.0, value=0.0)
+            col_p3, col_p4 = st.columns(2)
+            added_qty = col_p3.number_input("Kitni Quantity Aayi Hai?", min_value=1, value=50)
+            wholesale_cost = col_p4.number_input("Per Unit Kharid Cost Qemat (Rs)", min_value=0.0, value=20.0)
             
-            total_bill = p_qty * p_cost
-            remaining_payable = total_bill - p_cash_paid
+            total_bill_payable = added_qty * wholesale_cost
+            st.markdown(f"### 💸 Total Bill Formed: **{total_bill_payable:,.2f} Rs**")
             
-            st.info(f"📊 **Total Purchase Bill:** {total_bill:,.2f} Rs | **Remaining Ledger Balance (Udhaar):** {remaining_payable:,.2f} Rs")
+            purchase_payment_mode = st.radio("Is Inward Invoice Ki Payment Kaise Ki?", ["Udhaar Par Liya (Payable Balance Mein Add Ho)", "Cash / Direct Paid (No Khata Entry)"])
             
-            if st.button("📥 Save Purchase & Increase Stock"):
+            if st.button("📥 Record Stock Inward & Bill"):
                 conn = get_db_connection()
                 cursor = conn.cursor()
                 
-                cursor.execute("UPDATE inventory SET stock = stock + ?, cost_price = ? WHERE item_name = ?", (p_qty, p_cost, chosen_p_item))
+                cursor.execute("UPDATE inventory SET stock = stock + ?, cost_price = ? WHERE item_name = ?", (added_qty, wholesale_cost, chosen_item))
                 
-                if remaining_payable != 0:
-                    cursor.execute("UPDATE suppliers SET balance = balance + ? WHERE name = ?", (remaining_payable, chosen_sup_name))
-                
+                if purchase_payment_mode == "Udhaar Par Liya (Payable Balance Mein Add Ho)":
+                    cursor.execute("UPDATE suppliers SET balance = balance + ? WHERE name = ?", (total_bill_payable, chosen_sup_raw_name))
+                    st.session_state.sup_success_msg = f"🎉 Stock Inward Saved! Total {added_qty} units of '{chosen_item}' added. {total_bill_payable:,.2f} Rs added to {chosen_sup_raw_name}'s ledger account balance."
+                else:
+                    st.session_state.sup_success_msg = f"🎉 Paid Stock Inward Saved! Total {added_qty} units of '{chosen_item}' updated directly via Cash."
+                    
                 conn.commit()
                 conn.close()
-                st.session_state.sup_success_msg = f"🎉 Purchase saved! {chosen_p_item} ka stock +{p_qty} barh gaya aur supplier khata update ho gaya."
                 st.rerun()
 
     with tab_sup5:
-        st.subheader("💰 Paid to Supplier (Udhaar Wapsi)")
+        st.subheader("💰 Supplier Ko Udhaar Wapsi / Payment Entry")
         if df_sups.empty:
-            st.info("Koi registered supplier nahi hai.")
+            st.info("Koi supplier register nahi hai.")
         else:
-            pay_sups_options = {f"{row['Supplier Name']} (Pending: {row['Our Payable Balance (Rs)']} Rs)": row['Supplier Name'] for idx, row in df_sups.iterrows()}
-            selected_pay_sup = st.selectbox("Kis Supplier ko paise diye?", list(pay_sups_options.keys()))
-            chosen_pay_sup_name = pay_sups_options[selected_pay_sup]
+            pay_sup_options = {f"{row['Supplier Name']} ({row['Company/Wholesale Shop']}) Pending: {row['Our Payable Balance (Rs)']} Rs": row['Supplier Name'] for idx, row in df_sups.iterrows()}
+            selected_pay_sup = st.selectbox("Kis Supplier ko cash payment di hai?", list(pay_sup_options.keys()), key="sup_pay_sel")
+            target_pay_name = pay_sup_options[selected_pay_sup]
             
-            amount_to_pay = st.number_input("Kitni Rakam Ada Ki? (Amount Paid Rs)", min_value=1.0, value=500.0, step=100.0)
+            amount_paid_to_sup = st.number_input("Kitne paise paid kiye? (Rs)", min_value=1.0, value=100.0, step=50.0)
             
-            if st.button("💵 Update Supplier Ledger"):
+            if st.button("💵 Save Payment Entry"):
                 conn = get_db_connection()
                 cursor = conn.cursor()
-                cursor.execute("UPDATE suppliers SET balance = balance - ? WHERE name = ?", (amount_to_pay, chosen_pay_sup_name))
+                
+                cursor.execute("UPDATE suppliers SET balance = balance - ? WHERE name = ?", (amount_paid_to_sup, target_pay_name))
+                
+                today_date_str = datetime.now().strftime("%Y-%m-%d %I:%M:%S %p")
+                cursor.execute("INSERT INTO expenses (expense_date, category, amount, details) VALUES (?, ?, ?, ?)",
+                               (today_date_str, "Supplier Payment / Wholesale Clearing", amount_paid_to_sup, f"Paid to Supplier: {target_pay_name}"))
+                               
                 conn.commit()
                 conn.close()
-                st.session_state.sup_success_msg = f"🎉 Successfully Updated! '{chosen_pay_sup_name}' ke khate se {amount_to_pay:,.2f} Rs minus kar diye gaye hain."
+                st.session_state.sup_success_msg = f"🎉 Entry Recorded! Paid {amount_paid_to_sup:,.2f} Rs to '{target_pay_name}'. Updated balances and synched expenses tracker logs."
                 st.rerun()
 
 # ==================== 6. SALES DASHBOARD ====================
 elif choice == "📊 Sales Dashboard" and st.session_state.user_role == "Admin":
-    st.header("📊 Sales & Profit Analysis Dashboard")
+    st.header("📊 Sales Report & Profit Analysis")
     
     conn = get_db_connection()
     df_sales = pd.read_sql_query("SELECT * FROM sales", conn)
-    df_expenses = pd.read_sql_query("SELECT * FROM expenses", conn)
     conn.close()
     
     if df_sales.empty:
-        st.info("📊 Abhi tak koi sale record nahi hui.")
+        st.info("Abhi tak koi sale record nahi hui.")
     else:
-        df_sales['clean_date'] = df_sales['sale_date'].apply(lambda x: x.split(" ")[0])
-        if not df_expenses.empty:
-            df_expenses['clean_date'] = df_expenses['expense_date'].apply(lambda x: x.split(" ")[0])
-        else:
-            df_expenses['clean_date'] = pd.Series(dtype='str')
+        df_sales['total_sale'] = df_sales['total_sale'].astype(float)
+        df_sales['profit'] = df_sales['profit'].astype(float)
         
-        st.subheader("🔍 Filter Reports")
-        selected_date = st.date_input("Tareekh select karen", datetime.now().date())
-        selected_date_str = selected_date.strftime("%Y-%m-%d")
+        col1, col2, col3 = st.columns(3)
         
-        filtered_df = df_sales[df_sales['clean_date'] == selected_date_str]
-        filtered_exp = df_expenses[df_expenses['clean_date'] == selected_date_str] if not df_expenses.empty else pd.DataFrame()
+        gross_sales = df_sales[df_sales['item_name'] != "Cash Received (Udhaar Wapsi)"]['total_sale'].sum()
+        total_profit = df_sales['profit'].sum()
+        cash_received_khata = df_sales[df_sales['payment_mode'] == "Cash Received"]['total_sale'].sum()
         
-        if filtered_df.empty and filtered_exp.empty:
-            st.warning(f"⚠️ Selected Tareekh ({selected_date_str}) par na koi sale hui hai aur na koi kharcha.")
-        else:
-            st.markdown("### 📈 Summary Metrics")
-            m1, m2, m3, m4 = st.columns(4)
-            
-            actual_sales_df = filtered_df[filtered_df['payment_mode'] != "Cash Received"]
-            wapsi_df = filtered_df[filtered_df['payment_mode'] == "Cash Received"]
-            
-            total_sales_val = actual_sales_df['total_sale'].sum()
-            gross_profit_val = actual_sales_df['profit'].sum()
-            
-            day_expenses_total = filtered_exp['amount'].sum() if not filtered_exp.empty else 0.0
-            net_profit_val = gross_profit_val - day_expenses_total
-            total_wapsi_collection = wapsi_df['total_sale'].sum()
-            
-            m1.metric(label="💰 Total Sales (New Bills)", value=f"{total_sales_val:,.2f} Rs")
-            m2.metric(label="💸 Day Total Expenses (🔴 Minus)", value=f"{day_expenses_total:,.2f} Rs")
-            m3.metric(label="💚 Pure Net Profit (Kharche Nikal Kar)", value=f"{net_profit_val:,.2f} Rs")
-            m4.metric(label="💰 Recovered Cash (Udhaar Wapsi)", value=f"{total_wapsi_collection:,.2f} Rs")
-            
-            st.markdown("---")
-            
-            col_sales, col_exp = st.columns([2, 1])
-            
-            with col_sales:
-                st.subheader("📋 Day Sales Log Table")
-                log_df = filtered_df[['sale_date', 'item_name', 'quantity', 'total_sale', 'profit', 'payment_mode', 'customer_name']].copy()
-                log_df.columns = ['📅 Date & Time', '📦 Item / Action', '🔢 Qty', '💰 Amount', '💚 Net Profit', '💳 Mode', '👤 Customer']
-                st.dataframe(log_df, use_container_width=True)
-                
-            with col_exp:
-                st.subheader("📉 Day Expenses Log Table")
-                if filtered_exp.empty:
-                    st.info("Is tareekh ka koi kharcha nahi hai.")
-                else:
-                    show_exp_df = filtered_exp[['expense_date', 'category', 'amount']].copy()
-                    show_exp_df.columns = ['📅 Date & Time', '📁 Category', '💰 Amount']
-                    st.dataframe(show_exp_df, use_container_width=True)
-            
-            if st.button("🖨️ Print / Save Daily Sales & Expense Summary As PDF", key="print_daily_sales"):
-                html_rows = "".join([f"<tr><td>{row['📅 Date & Time']}</td><td>{row['📦 Item / Action']}</td><td>{row['🔢 Qty']}</td><td>{row['💰 Amount']} Rs</td><td>{row['💚 Net Profit']} Rs</td><td>{row['💳 Mode']}</td></tr>" for idx, row in log_df.iterrows()])
-                
-                html_content = f"""
-                    <div class='header'>
-                        <h2>AHA TRENDY KARYANA STORE</h2>
-                        <p>TariqAbad, Faisalabad, Pakistan</p>
-                        <h3>DAILY SALES & EXPENSE STATEMENT</h3>
-                    </div>
-                    <p><strong>Report Date:</strong> {selected_date_str}</p>
-                    <hr/>
-                    <div style='margin-bottom: 20px;'>
-                        <p><strong>Total New Sales:</strong> {total_sales_val:,.2f} Rs</p>
-                        <p><strong>Total Day Expenses:</strong> {day_expenses_total:,.2f} Rs</p>
-                        <p><strong>Pure Net Profit:</strong> {net_profit_val:,.2f} Rs</p>
-                        <p><strong>Recovered Udhaar Today:</strong> {total_wapsi_collection:,.2f} Rs</p>
-                    </div>
-                    <table>
-                        <thead>
-                            <tr><th>Date & Time</th><th>Item / Action</th><th>Qty</th><th>Amount</th><th>Net Profit</th><th>Mode</th></tr>
-                        </thead>
-                        <tbody>
-                            {html_rows}
-                        </tbody>
-                    </table>
-                    <div class='footer'><p>End of Report - Software Generated Statement.</p></div>
-                """
-                trigger_print(html_content)
+        col1.metric("🛒 Kul Sales Gross (Revenue)", f"{gross_sales:,.2f} Rs")
+        col2.metric("📈 Net Profit (Munafa)", f"{total_profit:,.2f} Rs")
+        col3.metric("💰 Recovered Cash (Udhaar Wapsi)", f"{cash_received_khata:,.2f} Rs")
+        
+        st.markdown("---")
+        st.subheader("📋 Transactions Log List")
+        
+        display_sales = df_sales[['sale_date', 'item_name', 'quantity', 'total_sale', 'profit', 'payment_mode', 'customer_name']].copy()
+        display_sales.columns = ['📅 Date & Time', '📦 Product Name', '🔢 Qty', '💰 Sale Total (Rs)', '📈 Earned Profit', '💳 Mode', '👤 Customer Name']
+        
+        st.dataframe(display_sales.sort_values(by='📅 Date & Time', ascending=False), use_container_width=True)
