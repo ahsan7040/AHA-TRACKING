@@ -44,7 +44,7 @@ def init_db():
                         amount REAL,
                         details TEXT)''')
                         
-    # Suppliers Table (Naya Table)
+    # Suppliers Table
     cursor.execute('''CREATE TABLE IF NOT EXISTS suppliers (
                         supplier_id INTEGER PRIMARY KEY AUTOINCREMENT,
                         name TEXT UNIQUE,
@@ -84,33 +84,94 @@ def trigger_print(html_content):
     """
     components.html(custom_html, height=0, width=0)
 
-# ==================== LOGIN SYSTEM ====================
+# ==================== LOGIN SYSTEM WITH MODERN CSS ====================
 if 'logged_in' not in st.session_state:
     st.session_state.logged_in = False
     st.session_state.user_role = None
 
 if not st.session_state.logged_in:
-    st.title("🔐 Karyana App - System Login")
-    st.markdown("---")
+    # Beautiful and corrected CSS Styling for Login Page
+    st.markdown("""
+        <style>
+        /* Main background setup */
+        [data-testid="stAppViewContainer"] {
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%) !important;
+        }
+        /* Hide default header */
+        [data-testid="stHeader"] {
+            background: transparent;
+        }
+        /* Main Login Card Design */
+        .login-card {
+            background-color: #ffffff;
+            padding: 40px;
+            border-radius: 15px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.05);
+            margin-top: 50px;
+            text-align: center;
+        }
+        .login-header {
+            color: #1e3a8a;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-weight: 700;
+            margin-bottom: 5px;
+        }
+        .login-subtitle {
+            color: #6b7280;
+            font-size: 14px;
+            margin-bottom: 25px;
+        }
+        /* Custom Button Styling */
+        div.stButton > button:first-child {
+            background-color: #1e3a8a !important;
+            color: white !important;
+            width: 100% !important;
+            border-radius: 8px !important;
+            border: none !important;
+            padding: 10px 20px !important;
+            font-weight: bold !important;
+            transition: all 0.3s ease;
+        }
+        div.stButton > button:first-child:hover {
+            background-color: #1d4ed8 !important;
+            box-shadow: 0 4px 12px rgba(29, 78, 216, 0.3) !important;
+        }
+        </style>
+    """, unsafe_allow_html=True)
+
+    # Centered layout columns
+    col1, col2, col3 = st.columns([1, 1.8, 1])
     
-    col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
-        username = st.text_input("Username (User ID)")
-        password = st.text_input("Password", type="password")
+        # Beautiful Card Container HTML
+        st.markdown("""
+            <div class="login-card">
+                <h1 class="login-header">🛒 AHA TRENDY KARYANA</h1>
+                <p class="login-subtitle">System Login — Dukan Management Software</p>
+            </div>
+        """, unsafe_allow_html=True)
         
-        if st.button("🚪 Log In"):
-            if username == "admin" and password == "admin123":
-                st.session_state.logged_in = True
-                st.session_state.user_role = "Admin"
-                st.success("🎉 Welcome Admin!")
-                st.rerun()
-            elif username == "sales" and password == "sales123":
-                st.session_state.logged_in = True
-                st.session_state.user_role = "Salesman"
-                st.success("🎉 Welcome Salesman!")
-                st.rerun()
-            else:
-                st.error("❌ Galat Username ya Password! Dubara koshish karen.")
+        # Form Container for Input Fields
+        with st.container():
+            st.markdown("<div style='background: white; padding: 0px 40px 40px 40px; border-radius: 0 0 15px 15px; margin-top: -30px; box-shadow: 0 15px 25px rgba(0, 0, 0, 0.05);'>", unsafe_allow_html=True)
+            username = st.text_input("Username (User ID)", placeholder="Enter username...")
+            password = st.text_input("Password", type="password", placeholder="Enter password...")
+            
+            st.markdown("<br>", unsafe_allow_html=True)
+            if st.button("🚪 LOG IN TO SYSTEM"):
+                if username == "admin" and password == "admin123":
+                    st.session_state.logged_in = True
+                    st.session_state.user_role = "Admin"
+                    st.success("🎉 Welcome Admin!")
+                    st.rerun()
+                elif username == "sales" and password == "sales123":
+                    st.session_state.logged_in = True
+                    st.session_state.user_role = "Salesman"
+                    st.success("🎉 Welcome Salesman!")
+                    st.rerun()
+                else:
+                    st.error("❌ Galat Username ya Password! Dubara koshish karen.")
+            st.markdown("</div>", unsafe_allow_html=True)
     st.stop()
 
 # ==================== MAIN DASHBOARD ====================
@@ -506,7 +567,7 @@ elif choice == "💸 Expense Tracker" and st.session_state.user_role == "Admin":
             st.metric(label="📊 Kul Total Kharche (All Time)", value=f"{total_exp_all_time:,.2f} Rs")
             st.dataframe(df_exp_list, use_container_width=True)
 
-# ==================== 5. SUPPLIER MANAGEMENT (NEW FEATURE) ====================
+# ==================== 5. SUPPLIER MANAGEMENT ====================
 elif choice == "👥 Supplier Management" and st.session_state.user_role == "Admin":
     st.header("👥 Supplier / Wholesaler Management")
     tab_sup1, tab_sup2, tab_sup3 = st.tabs(["👥 Supplier Register & Summary", "📦 Purchase / Stock Inward", "💰 Paid to Supplier"])
@@ -576,10 +637,8 @@ elif choice == "👥 Supplier Management" and st.session_state.user_role == "Adm
                 conn = get_db_connection()
                 cursor = conn.cursor()
                 
-                # 1. Update Stock Quantity and Cost Price in Inventory
                 cursor.execute("UPDATE inventory SET stock = stock + ?, cost_price = ? WHERE item_name = ?", (p_qty, p_cost, chosen_p_item))
                 
-                # 2. Update Supplier Payable Balance (if any amount left as udhaar)
                 if remaining_payable != 0:
                     cursor.execute("UPDATE suppliers SET balance = balance + ? WHERE name = ?", (remaining_payable, chosen_sup_name))
                 
