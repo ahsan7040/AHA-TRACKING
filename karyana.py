@@ -98,6 +98,9 @@ if 'logged_in' not in st.session_state:
     st.session_state.logged_in = False
     st.session_state.user_role = None
 
+# Logo file check (will look for logo.jpg or logo.png)
+logo_base64 = get_image_base64("logo.jpg") or get_image_base64("logo.png")
+
 if not st.session_state.logged_in:
     # Beautiful and corrected CSS Styling for Login Page
     st.markdown("""
@@ -161,11 +164,8 @@ if not st.session_state.logged_in:
     col1, col2, col3 = st.columns([1, 1.8, 1])
     
     with col2:
-        # Check for local logo image, if not found use fallback styling
-        logo_base64 = get_image_base64("logo.jpg") or get_image_base64("logo.png")
-        
         if logo_base64:
-            # Displays your professional round logo instead of the basket icon
+            # Displays your professional logo instead of the basket icon on login
             card_html = f"""
                 <div class="login-card">
                     <img src="data:image/jpeg;base64,{logo_base64}" class="login-logo">
@@ -208,7 +208,19 @@ if not st.session_state.logged_in:
     st.stop()
 
 # ==================== MAIN DASHBOARD ====================
-st.title("🛒 Karyana & General Retail Management System")
+# Yahan par tokri hata kar aapka logo shamil kiya gaya hai
+if logo_base64:
+    st.markdown(f"""
+        <div style="display: flex; align-items: center; gap: 20px; margin-bottom: 20px;">
+            <img src="data:image/jpeg;base64,{logo_base64}" style="max-width: 75px; height: auto; border-radius: 50%; box-shadow: 0 2px 6px rgba(0,0,0,0.15);">
+            <h1 style="margin: 0; color: #1e3a8a; font-family: 'Segoe UI', Arial, sans-serif; font-size: 36px; font-weight: 700;">
+                AHA Trendy Karyana & General Retail Management System
+            </h1>
+        </div>
+    """, unsafe_allow_html=True)
+else:
+    st.title("💼 AHA Trendy Karyana & General Retail Management System")
+
 st.sidebar.markdown(f"**👤 Current User:** `{st.session_state.user_role.upper()}`")
 
 if st.sidebar.button("🔒 Log Out"):
@@ -393,7 +405,7 @@ elif choice == "📦 Stock Management" and st.session_state.user_role == "Admin"
             
             if st.button("💾 Update Item Details"):
                 conn = get_db_connection()
-                cursor = conn.cursor()
+                cursor = cursor = conn.cursor()
                 cursor.execute("UPDATE inventory SET item_name = ?, stock = ?, price = ?, cost_price = ? WHERE item_name = ?", 
                                (new_name, new_stock, new_price, new_cost, mod_item_selected))
                 conn.commit()
