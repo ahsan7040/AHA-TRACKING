@@ -102,18 +102,14 @@ if 'logged_in' not in st.session_state:
 logo_base64 = get_image_base64("logo.jpg") or get_image_base64("logo.png")
 
 if not st.session_state.logged_in:
-    # Beautiful and corrected CSS Styling for Login Page
     st.markdown("""
         <style>
-        /* Main background setup */
         [data-testid="stAppViewContainer"] {
             background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%) !important;
         }
-        /* Hide default header */
         [data-testid="stHeader"] {
             background: transparent;
         }
-        /* Main Login Card Design */
         .login-card {
             background-color: #ffffff;
             padding: 30px 40px 40px 40px;
@@ -142,7 +138,6 @@ if not st.session_state.logged_in:
             font-size: 14px;
             margin-bottom: 25px;
         }
-        /* Custom Button Styling */
         div.stButton > button:first-child {
             background-color: #1e3a8a !important;
             color: white !important;
@@ -160,12 +155,10 @@ if not st.session_state.logged_in:
         </style>
     """, unsafe_allow_html=True)
 
-    # Centered layout columns
     col1, col2, col3 = st.columns([1, 1.8, 1])
     
     with col2:
         if logo_base64:
-            # Displays your professional logo instead of the basket icon on login
             card_html = f"""
                 <div class="login-card">
                     <img src="data:image/jpeg;base64,{logo_base64}" class="login-logo">
@@ -174,7 +167,6 @@ if not st.session_state.logged_in:
                 </div>
             """
         else:
-            # Fallback if image isn't in folder yet
             card_html = """
                 <div class="login-card">
                     <h1 class="login-header">👔 AHA TRENDY KARYANA</h1>
@@ -184,7 +176,6 @@ if not st.session_state.logged_in:
             
         st.markdown(card_html, unsafe_allow_html=True)
         
-        # Form Container for Input Fields
         with st.container():
             st.markdown("<div style='background: white; padding: 0px 40px 40px 40px; border-radius: 0 0 15px 15px; margin-top: -30px; box-shadow: 0 15px 25px rgba(0, 0, 0, 0.05);'>", unsafe_allow_html=True)
             username = st.text_input("Username (User ID)", placeholder="Enter username...")
@@ -208,7 +199,6 @@ if not st.session_state.logged_in:
     st.stop()
 
 # ==================== MAIN DASHBOARD ====================
-# Yahan par tokri hata kar aapka logo shamil kiya gaya hai
 if logo_base64:
     st.markdown(f"""
         <div style="display: flex; align-items: center; gap: 20px; margin-bottom: 20px;">
@@ -405,7 +395,7 @@ elif choice == "📦 Stock Management" and st.session_state.user_role == "Admin"
             
             if st.button("💾 Update Item Details"):
                 conn = get_db_connection()
-                cursor = cursor = conn.cursor()
+                cursor = conn.cursor()
                 cursor.execute("UPDATE inventory SET item_name = ?, stock = ?, price = ?, cost_price = ? WHERE item_name = ?", 
                                (new_name, new_stock, new_price, new_cost, mod_item_selected))
                 conn.commit()
@@ -612,10 +602,18 @@ elif choice == "💸 Expense Tracker" and st.session_state.user_role == "Admin":
             st.metric(label="📊 Kul Total Kharche (All Time)", value=f"{total_exp_all_time:,.2f} Rs")
             st.dataframe(df_exp_list, use_container_width=True)
 
-# ==================== 5. SUPPLIER MANAGEMENT ====================
+# ==================== 5. SUPPLIER MANAGEMENT (UPDATED) ====================
 elif choice == "👥 Supplier Management" and st.session_state.user_role == "Admin":
     st.header("👥 Supplier / Wholesaler Management")
-    tab_sup1, tab_sup2, tab_sup3 = st.tabs(["👥 Supplier Register & Summary", "📦 Purchase / Stock Inward", "💰 Paid to Supplier"])
+    
+    # MODIFIED HERE: Added Modify and Delete tabs alongside existing ones
+    tab_sup1, tab_sup2, tab_sup3, tab_sup4, tab_sup5 = st.tabs([
+        "👥 Supplier Register & Summary", 
+        "✏️ Modify Supplier", 
+        "🗑️ Delete Supplier", 
+        "📦 Purchase / Stock Inward", 
+        "💰 Paid to Supplier"
+    ])
     
     if "sup_success_msg" in st.session_state:
         st.success(st.session_state.sup_success_msg)
@@ -656,7 +654,71 @@ elif choice == "👥 Supplier Management" and st.session_state.user_role == "Adm
         else:
             st.dataframe(df_sups, use_container_width=True)
             
+    # NEW FEATURE: MODIFY SUPPLIER TAB
     with tab_sup2:
+        st.subheader("✏️ Supplier Ki Details Tabdeel/Modify Karen")
+        if df_sups.empty:
+            st.info("Koi supplier majood nahi hai jise modify kiya ja sakay.")
+        else:
+            mod_sup_options = {f"{row['Supplier Name']} ({row['Company/Wholesale Shop']})": row['Supplier Name'] for idx, row in df_sups.iterrows()}
+            selected_mod_sup = st.selectbox("Kis Supplier ki details change karni hain?", list(mod_sup_options.keys()), key="sup_mod_sel")
+            target_sup_name = mod_sup_options[selected_mod_sup]
+            
+            # Get current record details
+            conn = get_db_connection()
+            cursor = conn.cursor()
+            cursor.execute("SELECT name, phone, company, balance FROM suppliers WHERE name = ?", (target_sup_name,))
+            sup_details = cursor.fetchone()
+            conn.close()
+            
+            if sup_details:
+                col_m1, col_m2, col_m3 = st.columns(3)
+                updated_name = col_m1.text_input("Update Name", value=sup_details[0])
+                updated_phone = col_m2.text_input("Update Mobile / Account", value=sup_details[1])
+                updated_company = col_m3.text_input("Update Company / Shop Name", value=sup_details[2])
+                updated_balance = st.number_input("Update Ledger Balance (Rs)", value=float(sup_details[3]))
+                
+                if st.button("💾 Save Updated Supplier Details"):
+                    if updated_name == "" or updated_phone == "":
+                        st.error("Name aur Mobile number khali nahi chor sakte!")
+                    else:
+                        conn = get_db_connection()
+                        cursor = conn.cursor()
+                        try:
+                            cursor.execute("""UPDATE suppliers 
+                                              SET name = ?, phone = ?, company = ?, balance = ? 
+                                              WHERE name = ?""", 
+                                           (updated_name, updated_phone, updated_company, updated_balance, target_sup_name))
+                            conn.commit()
+                            st.session_state.sup_success_msg = f"✓ '{target_sup_name}' ke records kamyabi se update ho gaye!"
+                            st.rerun()
+                        except sqlite3.IntegrityError:
+                            st.error("⚠️ Error: Yeh naya naam ya phone number kisi aur supplier ke naam par pehle se registered hai.")
+                        finally:
+                            conn.close()
+
+    # NEW FEATURE: DELETE SUPPLIER TAB
+    with tab_sup3:
+        st.subheader("🗑️ Registered Supplier Deletion")
+        if df_sups.empty:
+            st.info("Database mein koi supplier nahi hai.")
+        else:
+            del_sup_options = {f"{row['Supplier Name']} ({row['Company/Wholesale Shop']}) [Payable: {row['Our Payable Balance (Rs)']} Rs]": row['Supplier Name'] for idx, row in df_sups.iterrows()}
+            selected_del_sup = st.selectbox("Kis Supplier ko system se nikalna hai?", list(del_sup_options.keys()), key="sup_del_sel")
+            target_del_name = del_sup_options[selected_del_sup]
+            
+            st.warning(f"⚠️ **Khususi Tawajah:** Kya aap waqai '{target_del_name}' ka mukammal account system se delete karna chahte hain? Yeh action wapas nahi laya ja sakega.")
+            
+            if st.button("🗑️ Confirm Permanent Delete"):
+                conn = get_db_connection()
+                cursor = conn.cursor()
+                cursor.execute("DELETE FROM suppliers WHERE name = ?", (target_del_name,))
+                conn.commit()
+                conn.close()
+                st.session_state.sup_success_msg = f"❌ Supplier '{target_del_name}' ko system se kamyabi se delete kar diya gaya."
+                st.rerun()
+
+    with tab_sup4:
         st.subheader("📦 Maal Purchase / Stock Inward Entry")
         if df_sups.empty or df_inv_list.empty:
             st.warning("⚠️ Pehle 'Supplier Register' karen aur 'Stock Management' mein item shamil karen!")
@@ -692,7 +754,7 @@ elif choice == "👥 Supplier Management" and st.session_state.user_role == "Adm
                 st.session_state.sup_success_msg = f"🎉 Purchase saved! {chosen_p_item} ka stock +{p_qty} barh gaya aur supplier khata update ho gaya."
                 st.rerun()
 
-    with tab_sup3:
+    with tab_sup5:
         st.subheader("💰 Paid to Supplier (Udhaar Wapsi)")
         if df_sups.empty:
             st.info("Koi registered supplier nahi hai.")
