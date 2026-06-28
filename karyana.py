@@ -3,6 +3,8 @@ import sqlite3
 import pandas as pd
 from datetime import datetime
 import streamlit.components.v1 as components
+import os
+import base64
 
 # Database initialization
 def init_db():
@@ -60,6 +62,13 @@ init_db()
 # Main App Layout Configuration
 st.set_page_config(page_title="AHA Trendy Karyana", layout="wide")
 
+# Helper function to convert local image to base64 for HTML display
+def get_image_base64(image_path):
+    if os.path.exists(image_path):
+        with open(image_path, "rb") as img_file:
+            return base64.b64encode(img_file.read()).decode()
+    return None
+
 # JS Helper function to trigger browser print menu
 def trigger_print(html_content):
     custom_html = f"""
@@ -104,17 +113,26 @@ if not st.session_state.logged_in:
         /* Main Login Card Design */
         .login-card {
             background-color: #ffffff;
-            padding: 40px;
+            padding: 30px 40px 40px 40px;
             border-radius: 15px;
             box-shadow: 0 10px 25px rgba(0, 0, 0, 0.05);
-            margin-top: 50px;
+            margin-top: 40px;
             text-align: center;
+        }
+        .login-logo {
+            max-width: 140px;
+            height: auto;
+            margin-bottom: 15px;
+            border-radius: 50%;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
         }
         .login-header {
             color: #1e3a8a;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             font-weight: 700;
+            font-size: 28px;
             margin-bottom: 5px;
+            margin-top: 10px;
         }
         .login-subtitle {
             color: #6b7280;
@@ -143,13 +161,28 @@ if not st.session_state.logged_in:
     col1, col2, col3 = st.columns([1, 1.8, 1])
     
     with col2:
-        # Beautiful Card Container HTML
-        st.markdown("""
-            <div class="login-card">
-                <h1 class="login-header">🛒 AHA TRENDY KARYANA</h1>
-                <p class="login-subtitle">System Login — Dukan Management Software</p>
-            </div>
-        """, unsafe_allow_html=True)
+        # Check for local logo image, if not found use fallback styling
+        logo_base64 = get_image_base64("logo.jpg") or get_image_base64("logo.png")
+        
+        if logo_base64:
+            # Displays your professional round logo instead of the basket icon
+            card_html = f"""
+                <div class="login-card">
+                    <img src="data:image/jpeg;base64,{logo_base64}" class="login-logo">
+                    <h1 class="login-header">AHA TRENDY KARYANA</h1>
+                    <p class="login-subtitle">System Login — Dukan Management Software</p>
+                </div>
+            """
+        else:
+            # Fallback if image isn't in folder yet
+            card_html = """
+                <div class="login-card">
+                    <h1 class="login-header">👔 AHA TRENDY KARYANA</h1>
+                    <p class="login-subtitle">System Login — Dukan Management Software (Place 'logo.jpg' in folder)</p>
+                </div>
+            """
+            
+        st.markdown(card_html, unsafe_allow_html=True)
         
         # Form Container for Input Fields
         with st.container():
