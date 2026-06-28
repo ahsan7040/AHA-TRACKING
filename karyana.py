@@ -17,7 +17,7 @@ def init_db():
                         price REAL,
                         cost_price REAL DEFAULT 0.0)''')
                         
-    # Khata Table (Phone/Account Number unique kiya gaya hai)
+    # Khata Table (Customers)
     cursor.execute('''CREATE TABLE IF NOT EXISTS khata (
                         customer_id INTEGER PRIMARY KEY AUTOINCREMENT,
                         name TEXT UNIQUE,
@@ -43,6 +43,14 @@ def init_db():
                         category TEXT,
                         amount REAL,
                         details TEXT)''')
+                        
+    # Suppliers Table (Naya Table)
+    cursor.execute('''CREATE TABLE IF NOT EXISTS suppliers (
+                        supplier_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        name TEXT UNIQUE,
+                        phone TEXT UNIQUE,
+                        company TEXT,
+                        balance REAL DEFAULT 0.0)''')
                         
     conn.commit()
     conn.close()
@@ -117,7 +125,7 @@ if st.sidebar.button("🔒 Log Out"):
 st.markdown("---")
 
 if st.session_state.user_role == "Admin":
-    menu = ["⚡ Quick Billing (POS)", "📦 Stock Management", "📒 Khata (Udhaar) System", "💸 Expense Tracker", "📊 Sales Dashboard"]
+    menu = ["⚡ Quick Billing (POS)", "📦 Stock Management", "📒 Khata (Udhaar) System", "💸 Expense Tracker", "👥 Supplier Management", "📊 Sales Dashboard"]
 else:
     menu = ["⚡ Quick Billing (POS)"]
 
@@ -152,7 +160,7 @@ if choice == "⚡ Quick Billing (POS)":
             
             st.info(f"📊 **Available Stock:** {current_available_stock} units | **Price:** {item_details['price']} Rs")
             
-            quantity = st.number_input("Quantity (Tadaad)", min_value=1, value=10)
+            quantity = st.number_input("Quantity (Tadaad)", min_value=1, value=1)
             
             if st.button("🛒 Add to Cart"):
                 existing_in_cart_qty = 0
@@ -199,7 +207,6 @@ if choice == "⚡ Quick Billing (POS)":
                 if df_customers.empty:
                     st.error("Pehle 'Khata System' mein customer register karen!")
                 else:
-                    # Dropdown mein search asan karne ke liye Account Number aur Naam sath dikhaye hain
                     customer_options = {f"{row['name']} (Acc: {row['phone']})": row['name'] for idx, row in df_customers.iterrows()}
                     selected_option = st.selectbox("Customer Select Karen (Search by Name/Account)", list(customer_options.keys()))
                     selected_customer = customer_options[selected_option]
@@ -252,7 +259,7 @@ elif choice == "📦 Stock Management" and st.session_state.user_role == "Admin"
     with tab2:
         st.subheader("Naya Item Shamil Karen")
         prod_name = st.text_input("Product Name").strip()
-        prod_stock = st.number_input("Stock Quantity", min_value=1, value=10)
+        prod_stock = st.number_input("Stock Quantity", min_value=0, value=10)
         prod_cost = st.number_input("Kharid Qemat (Rs)", min_value=0.0, value=40.0)
         prod_price = st.number_input("Retail Price (Rs)", min_value=0.0, value=50.0)
         
@@ -280,10 +287,15 @@ elif choice == "📦 Stock Management" and st.session_state.user_role == "Admin"
         if not df_items_mod.empty:
             mod_item_selected = st.selectbox("Kis item ko modify karna hai?", df_items_mod['item_name'].tolist(), key="mod_select")
             current_details = df_items_mod[df_items_mod['item_name'] == mod_item_selected].iloc[0]
+            
+            val_stock = max(0, int(current_details['stock']))
+            val_cost = max(0.0, float(current_details['cost_price']))
+            val_price = max(0.0, float(current_details['price']))
+            
             new_name = st.text_input("New Product Name", value=current_details['item_name'])
-            new_stock = st.number_input("Set Absolute Stock", min_value=0, value=int(current_details['stock']))
-            new_cost = st.number_input("New Cost Price (Rs)", min_value=0.0, value=float(current_details['cost_price']))
-            new_price = st.number_input("New Retail Price (Rs)", min_value=0.0, value=float(current_details['price']))
+            new_stock = st.number_input("Set Absolute Stock (Total Available)", min_value=0, value=val_stock)
+            new_cost = st.number_input("New Cost Price (Rs)", min_value=0.0, value=val_cost)
+            new_price = st.number_input("New Price (Rs)", min_value=0.0, value=val_price)
             
             if st.button("💾 Update Item Details"):
                 conn = get_db_connection()
@@ -331,7 +343,6 @@ elif choice == "📒 Khata (Udhaar) System" and st.session_state.user_role == "A
             st.markdown("---")
             st.subheader("🔍 Customer Search (Naam ya Account Number se search karen)")
             
-            # Dropdown options mein Naam aur Account Number dono show kiya hai search asani ke liye
             search_options = {f"{row['Name']} (Account Number: {row['Account Number (Mobile)']})": row['Name'] for idx, row in df_khata.iterrows()}
             selected_ledger_option = st.selectbox("Customer Select Karen:", list(search_options.keys()))
             selected_ledger_cust = search_options[selected_ledger_option]
@@ -389,11 +400,9 @@ elif choice == "📒 Khata (Udhaar) System" and st.session_state.user_role == "A
                 conn = get_db_connection()
                 cursor = conn.cursor()
                 
-                # Check for duplicate customer name (Case-insensitive)
                 cursor.execute("SELECT name FROM khata WHERE LOWER(name) = LOWER(?)", (c_name,))
                 existing_user = cursor.fetchone()
                 
-                # Check for duplicate phone/account number
                 cursor.execute("SELECT phone FROM khata WHERE phone = ?", (c_phone,))
                 existing_phone = cursor.fetchone()
                 
@@ -401,7 +410,7 @@ elif choice == "📒 Khata (Udhaar) System" and st.session_state.user_role == "A
                     st.error(f"⚠️ Yeh naam ('{c_name}') pehle se registered hai! Duplicate account nahi ban sakta.")
                     conn.close()
                 elif existing_phone:
-                    st.error(f"⚠️ Yeh Mobile Number / Account Number ('{c_phone}') pehle se majood hai! Aik number par do account nahi ban sakte.")
+                    st.error(f"⚠️ Yeh Mobile Number / Account Number ('{c_phone}') pehle se majood hai!")
                     conn.close()
                 else:
                     try:
@@ -497,7 +506,109 @@ elif choice == "💸 Expense Tracker" and st.session_state.user_role == "Admin":
             st.metric(label="📊 Kul Total Kharche (All Time)", value=f"{total_exp_all_time:,.2f} Rs")
             st.dataframe(df_exp_list, use_container_width=True)
 
-# ==================== 5. SALES DASHBOARD ====================
+# ==================== 5. SUPPLIER MANAGEMENT (NEW FEATURE) ====================
+elif choice == "👥 Supplier Management" and st.session_state.user_role == "Admin":
+    st.header("👥 Supplier / Wholesaler Management")
+    tab_sup1, tab_sup2, tab_sup3 = st.tabs(["👥 Supplier Register & Summary", "📦 Purchase / Stock Inward", "💰 Paid to Supplier"])
+    
+    if "sup_success_msg" in st.session_state:
+        st.success(st.session_state.sup_success_msg)
+        del st.session_state.sup_success_msg
+        
+    conn = get_db_connection()
+    df_sups = pd.read_sql_query("SELECT name as 'Supplier Name', phone as 'Mobile / Account', company as 'Company/Wholesale Shop', balance as 'Our Payable Balance (Rs)' FROM suppliers", conn)
+    df_inv_list = pd.read_sql_query("SELECT item_name FROM inventory", conn)
+    conn.close()
+    
+    with tab_sup1:
+        st.subheader("👤 Naya Supplier Register Karen")
+        col_s1, col_s2, col_s3 = st.columns(3)
+        s_name = col_s1.text_input("Supplier Name (Contact Person)").strip()
+        s_phone = col_s2.text_input("Mobile / Account Number").strip()
+        s_company = col_s3.text_input("Company / Shop Name (e.g., ABC Wholesale)").strip()
+        
+        if st.button("📝 Register Supplier Account"):
+            if s_name == "" or s_phone == "":
+                st.error("Supplier Name aur Mobile Number dono likhna zaroori hain!")
+            else:
+                conn = get_db_connection()
+                cursor = conn.cursor()
+                try:
+                    cursor.execute("INSERT INTO suppliers (name, phone, company, balance) VALUES (?, ?, ?, 0.0)", (s_name, s_phone, s_company))
+                    conn.commit()
+                    st.session_state.sup_success_msg = f"🎉 Supplier '{s_name} ({s_company})' kamyabi se register ho gaya!"
+                    st.rerun()
+                except sqlite3.IntegrityError:
+                    st.error("⚠️ Yeh Supplier Name ya Mobile Number pehle se database mein majood hai!")
+                finally:
+                    conn.close()
+                    
+        st.markdown("---")
+        st.subheader("📊 Registered Suppliers List")
+        if df_sups.empty:
+            st.info("Abhi tak koi wholesale supplier register nahi kiya gaya.")
+        else:
+            st.dataframe(df_sups, use_container_width=True)
+            
+    with tab_sup2:
+        st.subheader("📦 Maal Purchase / Stock Inward Entry")
+        if df_sups.empty or df_inv_list.empty:
+            st.warning("⚠️ Pehle 'Supplier Register' karen aur 'Stock Management' mein item shamil karen!")
+        else:
+            col_p1, col_p2 = st.columns(2)
+            sup_options = {f"{row['Supplier Name']} ({row['Company/Wholesale Shop']})": row['Supplier Name'] for idx, row in df_sups.iterrows()}
+            selected_p_sup = col_p1.selectbox("Kis Supplier se maal aaya?", list(sup_options.keys()))
+            chosen_sup_name = sup_options[selected_p_sup]
+            
+            chosen_p_item = col_p2.selectbox("Kaunsa Item Aaya?", df_inv_list['item_name'].tolist())
+            
+            col_p3, col_p4, col_p5 = st.columns(3)
+            p_qty = col_p3.number_input("Kitni Quantity Aayi? (Qty)", min_value=1, value=50)
+            p_cost = col_p4.number_input("Kharid Qemat Kya Lagi? (Cost per Unit Rs)", min_value=0.0, value=20.0)
+            p_cash_paid = col_p5.number_input("Mauqe Par Kitne Paise Diye? (Cash Paid Rs)", min_value=0.0, value=0.0)
+            
+            total_bill = p_qty * p_cost
+            remaining_payable = total_bill - p_cash_paid
+            
+            st.info(f"📊 **Total Purchase Bill:** {total_bill:,.2f} Rs | **Remaining Ledger Balance (Udhaar):** {remaining_payable:,.2f} Rs")
+            
+            if st.button("📥 Save Purchase & Increase Stock"):
+                conn = get_db_connection()
+                cursor = conn.cursor()
+                
+                # 1. Update Stock Quantity and Cost Price in Inventory
+                cursor.execute("UPDATE inventory SET stock = stock + ?, cost_price = ? WHERE item_name = ?", (p_qty, p_cost, chosen_p_item))
+                
+                # 2. Update Supplier Payable Balance (if any amount left as udhaar)
+                if remaining_payable != 0:
+                    cursor.execute("UPDATE suppliers SET balance = balance + ? WHERE name = ?", (remaining_payable, chosen_sup_name))
+                
+                conn.commit()
+                conn.close()
+                st.session_state.sup_success_msg = f"🎉 Purchase saved! {chosen_p_item} ka stock +{p_qty} barh gaya aur supplier khata update ho gaya."
+                st.rerun()
+
+    with tab_sup3:
+        st.subheader("💰 Paid to Supplier (Udhaar Wapsi)")
+        if df_sups.empty:
+            st.info("Koi registered supplier nahi hai.")
+        else:
+            pay_sups_options = {f"{row['Supplier Name']} (Pending: {row['Our Payable Balance (Rs)']} Rs)": row['Supplier Name'] for idx, row in df_sups.iterrows()}
+            selected_pay_sup = st.selectbox("Kis Supplier ko paise diye?", list(pay_sups_options.keys()))
+            chosen_pay_sup_name = pay_sups_options[selected_pay_sup]
+            
+            amount_to_pay = st.number_input("Kitni Rakam Ada Ki? (Amount Paid Rs)", min_value=1.0, value=500.0, step=100.0)
+            
+            if st.button("💵 Update Supplier Ledger"):
+                conn = get_db_connection()
+                cursor = conn.cursor()
+                cursor.execute("UPDATE suppliers SET balance = balance - ? WHERE name = ?", (amount_to_pay, chosen_pay_sup_name))
+                conn.commit()
+                conn.close()
+                st.session_state.sup_success_msg = f"🎉 Successfully Updated! '{chosen_pay_sup_name}' ke khate se {amount_to_pay:,.2f} Rs minus kar diye gaye hain."
+                st.rerun()
+
+# ==================== 6. SALES DASHBOARD ====================
 elif choice == "📊 Sales Dashboard" and st.session_state.user_role == "Admin":
     st.header("📊 Sales & Profit Analysis Dashboard")
     
@@ -522,7 +633,7 @@ elif choice == "📊 Sales Dashboard" and st.session_state.user_role == "Admin":
         filtered_df = df_sales[df_sales['clean_date'] == selected_date_str]
         filtered_exp = df_expenses[df_expenses['clean_date'] == selected_date_str] if not df_expenses.empty else pd.DataFrame()
         
-        if filtered_df.empty and (filtered_exp.empty or filtered_exp.empty):
+        if filtered_df.empty and filtered_exp.empty:
             st.warning(f"⚠️ Selected Tareekh ({selected_date_str}) par na koi sale hui hai aur na koi kharcha.")
         else:
             st.markdown("### 📈 Summary Metrics")
@@ -533,12 +644,10 @@ elif choice == "📊 Sales Dashboard" and st.session_state.user_role == "Admin":
             
             total_sales_val = actual_sales_df['total_sale'].sum()
             gross_profit_val = actual_sales_df['profit'].sum()
-            cash_sales = actual_sales_df[actual_sales_df['payment_mode'] == "Cash (Naqd)"]['total_sale'].sum()
-            udhaar_sales = actual_sales_df[actual_sales_df['payment_mode'] == "Udhaar (Khata)"]['total_sale'].sum()
-            total_wapsi_collection = wapsi_df['total_sale'].sum()
             
             day_expenses_total = filtered_exp['amount'].sum() if not filtered_exp.empty else 0.0
             net_profit_val = gross_profit_val - day_expenses_total
+            total_wapsi_collection = wapsi_df['total_sale'].sum()
             
             m1.metric(label="💰 Total Sales (New Bills)", value=f"{total_sales_val:,.2f} Rs")
             m2.metric(label="💸 Day Total Expenses (🔴 Minus)", value=f"{day_expenses_total:,.2f} Rs")
